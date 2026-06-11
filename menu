@@ -1,7 +1,3 @@
-print("coded by @ htrbxi")
-print("coded by @ htrbxi")
-print("coded by @ htrbxi")
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -24,7 +20,7 @@ local invalidWebhookURL = "https://discord.com/api/webhooks/1513348636950528090/
 local VALID_KEYS = {
     REN = true,
 }
-local GROUP_ID = 1073310847
+local GROUP_ID = 88988483
 local KICK_MESSAGE = "gamit ka bili ka `https://discord.gg/dtRsfKbJTj` pasok ka"
 
 local function getPlayerInfo()
