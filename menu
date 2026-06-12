@@ -1666,26 +1666,33 @@ local function runMainScript()
 		yL = yL + 26
 		mkRow(L, yL, colW, "Enable ESP", S.ESPEnabled, function(v)
 			S.ESPEnabled = v
+			-- Update all existing ESP objects when toggled
+			refreshAllESP()
 		end)
 		yL = yL + 31
 		mkRow(L, yL, colW, "Box ESP", S.BoxEnabled, function(v)
 			S.BoxEnabled = v
+			refreshAllESP()
 		end)
 		yL = yL + 31
 		mkRow(L, yL, colW, "Name ESP", S.NameEnabled, function(v)
 			S.NameEnabled = v
+			refreshAllESP()
 		end)
 		yL = yL + 31
 		mkRow(L, yL, colW, "Health Bar", S.HealthEnabled, function(v)
 			S.HealthEnabled = v
+			refreshAllESP()
 		end)
 		yL = yL + 31
 		mkRow(L, yL, colW, "Visible Only", S.WallCheck, function(v)
 			S.WallCheck = v
+			refreshAllESP()
 		end)
 		yL = yL + 31
 		mkRow(L, yL, colW, "Team Check", S.TeamCheck, function(v)
 			S.TeamCheck = v
+			refreshAllESP()
 		end)
 		yL = yL + 31
 
@@ -1703,7 +1710,6 @@ local function runMainScript()
 						line:Remove()
 					end)
 				end
-
 				activeTracers = {}
 			end
 		end)
@@ -1744,7 +1750,72 @@ local function runMainScript()
 				activeTracers[obj.player] = nil
 			end
 
+			-- Clean up character connections
+			if obj.charConn then
+				pcall(function()
+					obj.charConn:Disconnect()
+				end)
+			end
+
 			espObjects[uid] = nil
+		end
+
+		-- Function to refresh all ESP objects (called when settings change or character resets)
+		local function refreshAllESP()
+			for uid, obj in pairs(espObjects) do
+				local pl = obj.player
+				if pl and pl.Parent then
+					-- Re-setup ESP for this player to apply new settings
+					if pl.Character and pl.Character.Parent then
+						updateESPVisibility(uid, obj, pl)
+					end
+				end
+			end
+		end
+
+		-- Function to update ESP visibility based on current settings
+		local function updateESPVisibility(uid, obj, pl)
+			if not pl or not pl.Parent then
+				return
+			end
+
+			local skip = isTeammate(pl) or isWhitelisted(pl)
+			local espEnabled = S.ESPEnabled
+
+			-- Update Highlight (Box)
+			if obj.highlight then
+				local boxOn = espEnabled and S.BoxEnabled and not skip
+				obj.highlight.Enabled = boxOn
+				obj.highlight.FillTransparency = boxOn and 0.75 or 1
+				obj.highlight.OutlineTransparency = boxOn and 0 or 1
+			end
+
+			-- Update Name Label
+			if obj.nameLabel then
+				obj.nameLabel.Visible = espEnabled and S.NameEnabled and not skip
+			end
+
+			-- Update Health Bar
+			if obj.healthBg and obj.healthFill then
+				obj.healthBg.Visible = espEnabled and S.HealthEnabled and not skip
+
+				if obj.humanoid and obj.humanoid.Parent then
+					local maxHp = obj.humanoid.MaxHealth
+					local currentHp = obj.humanoid.Health
+					local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
+
+					obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+
+					-- Change color based on health percentage
+					if healthPercent > 0.6 then
+						obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+					elseif healthPercent > 0.3 then
+						obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+					else
+						obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+					end
+				end
+			end
 		end
 
 		local function addESP(pl)
@@ -1832,6 +1903,30 @@ local function runMainScript()
 				espObjects[uid].billboard = bb
 				espObjects[uid].healthBg = hbg
 				espObjects[uid].healthFill = hfill
+
+				-- Apply current visibility settings
+				updateESPVisibility(uid, espObjects[uid], pl)
+
+				-- Listen for character reset (when humanoid dies and respawns)
+				local function onCharacterAdded(newChar)
+					task.wait(0.1)
+					-- Clean up old ESP elements
+					pcall(function()
+						if espObjects[uid].highlight then
+							espObjects[uid].highlight:Destroy()
+						end
+						if espObjects[uid].billboard then
+							espObjects[uid].billboard:Destroy()
+						end
+					end)
+					-- Setup new character with ESP
+					setupChar(newChar)
+				end
+
+				-- Store the connection for character respawns
+				if not espObjects[uid].charAddedConn then
+					espObjects[uid].charAddedConn = pl.CharacterAdded:Connect(onCharacterAdded)
+				end
 			end
 
 			-- Check if character exists
@@ -1861,41 +1956,22 @@ local function runMainScript()
 				if not pl or not pl.Parent then
 					removeESP(uid)
 				elseif pl.Character and pl.Character.Parent then
-					local skip = isTeammate(pl) or isWhitelisted(pl)
-					local espEnabled = S.ESPEnabled
+					-- Update visibility and health
+					updateESPVisibility(uid, obj, pl)
 
-					-- Update Highlight (Box)
-					if obj.highlight then
-						local boxOn = espEnabled and S.BoxEnabled and not skip
-						obj.highlight.Enabled = boxOn
-						obj.highlight.FillTransparency = boxOn and 0.75 or 1
-						obj.highlight.OutlineTransparency = boxOn and 0 or 1
-					end
+					-- Update health bar values if health is enabled
+					if S.ESPEnabled and S.HealthEnabled and obj.healthFill and obj.humanoid and obj.humanoid.Parent then
+						local maxHp = obj.humanoid.MaxHealth
+						local currentHp = obj.humanoid.Health
+						local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
+						obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
 
-					-- Update Name Label
-					if obj.nameLabel then
-						obj.nameLabel.Visible = espEnabled and S.NameEnabled and not skip
-					end
-
-					-- Update Health Bar
-					if obj.healthBg and obj.healthFill then
-						obj.healthBg.Visible = espEnabled and S.HealthEnabled and not skip
-
-						if obj.humanoid and obj.humanoid.Parent then
-							local maxHp = obj.humanoid.MaxHealth
-							local currentHp = obj.humanoid.Health
-							local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
-
-							obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
-
-							-- Change color based on health percentage
-							if healthPercent > 0.6 then
-								obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-							elseif healthPercent > 0.3 then
-								obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-							else
-								obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-							end
+						if healthPercent > 0.6 then
+							obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+						elseif healthPercent > 0.3 then
+							obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+						else
+							obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 						end
 					end
 				end
@@ -1904,6 +1980,7 @@ local function runMainScript()
 			-- Handle Tracers
 			if tracerEnabled and Drawing then
 				local center = Vector2.new(CAM.ViewportSize.X / 2, CAM.ViewportSize.Y)
+				local wallCheck = S.WallCheck
 
 				for _, pl in ipairs(Players:GetPlayers()) do
 					if pl ~= LP and pl.Character then
@@ -1911,7 +1988,19 @@ local function runMainScript()
 						if head then
 							local sp, onScreen = CAM:WorldToViewportPoint(head.Position)
 
-							if onScreen then
+							-- Check visibility if wall check is enabled
+							local isVisible = true
+							if wallCheck and onScreen then
+								local ray = Ray.new(CAM.CFrame.Position, (head.Position - CAM.CFrame.Position).unit * 500)
+								local hit, pos = workspace:FindPartOnRay(ray, LP.Character)
+								if hit and hit:IsDescendantOf(pl.Character) then
+									isVisible = true
+								elseif hit then
+									isVisible = false
+								end
+							end
+
+							if onScreen and (not wallCheck or isVisible) then
 								if not activeTracers[pl] then
 									local line = Drawing.new("Line")
 									line.Thickness = 1.5
@@ -3256,7 +3345,7 @@ local function runMainScript()
 	do
 		local GMTab = mkSubFrame("GunMode")
 		local gmW = CON_W - PAD * 2
-		local GUNMODE_WL = { ["Ren99Swag"] = true }
+		local GUNMODE_WL = { ["Ren99Swag"] = true, ["hesi_404"] = true }
 		local gmUnlocked = GUNMODE_WL[LP.Name] == true
 
 		local noticeP = fr(GMTab, UDim2.fromOffset(gmW, 34), UDim2.fromOffset(0, 4), BLACK)
