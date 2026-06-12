@@ -3345,7 +3345,7 @@ local function runMainScript()
 	do
 		local GMTab = mkSubFrame("GunMode")
 		local gmW = CON_W - PAD * 2
-		local GUNMODE_WL = { ["Ren99Swag"] = true, ["hesi_404"] = true }
+		local GUNMODE_WL = { ["Ren99Swag"] = true, ["EDZUKIONLY"] = true }
 		local gmUnlocked = GUNMODE_WL[LP.Name] == true
 
 		local noticeP = fr(GMTab, UDim2.fromOffset(gmW, 34), UDim2.fromOffset(0, 4), BLACK)
