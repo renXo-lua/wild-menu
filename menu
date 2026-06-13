@@ -1659,390 +1659,426 @@ local function runMainScript()
     local activeTracers = {}
 
 	do
-		local ESPTab = mkSubFrame("ESP")
-		local L, R, colW = mkTwoCols(ESPTab)
-		local yL = 0
-		secLabel(L, yL, colW, "ESP")
-		yL = yL + 26
-		mkRow(L, yL, colW, "Enable ESP", S.ESPEnabled, function(v)
-			S.ESPEnabled = v
-			-- Update all existing ESP objects when toggled
-			refreshAllESP()
-		end)
-		yL = yL + 31
-		mkRow(L, yL, colW, "Box ESP", S.BoxEnabled, function(v)
-			S.BoxEnabled = v
-			refreshAllESP()
-		end)
-		yL = yL + 31
-		mkRow(L, yL, colW, "Name ESP", S.NameEnabled, function(v)
-			S.NameEnabled = v
-			refreshAllESP()
-		end)
-		yL = yL + 31
-		mkRow(L, yL, colW, "Health Bar", S.HealthEnabled, function(v)
-			S.HealthEnabled = v
-			refreshAllESP()
-		end)
-		yL = yL + 31
-		mkRow(L, yL, colW, "Visible Only", S.WallCheck, function(v)
-			S.WallCheck = v
-			refreshAllESP()
-		end)
-		yL = yL + 31
-		mkRow(L, yL, colW, "Team Check", S.TeamCheck, function(v)
-			S.TeamCheck = v
-			refreshAllESP()
-		end)
-		yL = yL + 31
+    local ESPTab = mkSubFrame("ESP")
+    local L, R, colW = mkTwoCols(ESPTab)
+    local yL = 0
+    secLabel(L, yL, colW, "ESP")
+    yL = yL + 26
+    mkRow(L, yL, colW, "Enable ESP", S.ESPEnabled, function(v)
+        S.ESPEnabled = v
+        refreshAllESP()
+    end)
+    yL = yL + 31
+    mkRow(L, yL, colW, "Box ESP", S.BoxEnabled, function(v)
+        S.BoxEnabled = v
+        refreshAllESP()
+    end)
+    yL = yL + 31
+    mkRow(L, yL, colW, "Name ESP", S.NameEnabled, function(v)
+        S.NameEnabled = v
+        refreshAllESP()
+    end)
+    yL = yL + 31
+    mkRow(L, yL, colW, "Health Bar", S.HealthEnabled, function(v)
+        S.HealthEnabled = v
+        refreshAllESP()
+    end)
+    yL = yL + 31
+    mkRow(L, yL, colW, "Visible Only", S.WallCheck, function(v)
+        S.WallCheck = v
+    end)
+    yL = yL + 31
+    mkRow(L, yL, colW, "Team Check", S.TeamCheck, function(v)
+        S.TeamCheck = v
+        refreshAllESP()
+    end)
+    yL = yL + 31
 
-		local yR = 0
-		secLabel(R, yR, colW, "TRACER")
-		yR = yR + 26
-		local tracerEnabled = false
+    local yR = 0
+    secLabel(R, yR, colW, "TRACER")
+    yR = yR + 26
+    local tracerEnabled = false
 
-		mkRow(R, yR, colW, "Enable Tracer", false, function(v)
-			tracerEnabled = v
+    mkRow(R, yR, colW, "Enable Tracer", false, function(v)
+        tracerEnabled = v
 
-			if not v then
-				for _, line in pairs(activeTracers) do
-					pcall(function()
-						line:Remove()
-					end)
-				end
-				activeTracers = {}
-			end
-		end)
-		yR = yR + 31
+        if not v then
+            for _, line in pairs(activeTracers) do
+                pcall(function()
+                    line:Remove()
+                end)
+            end
+            activeTracers = {}
+        end
+    end)
+    yR = yR + 31
 
-		local function isTeammate(pl)
-			return S.TeamCheck and pl.Team ~= nil and pl.Team == LP.Team
-		end
+    local function isTeammate(pl)
+        return S.TeamCheck and pl.Team ~= nil and pl.Team == LP.Team
+    end
 
-		local function isWhitelisted(pl)
-			return S.WhitelistEnabled and WhitelistState[pl.UserId] == true
-		end
+    local function isWhitelisted(pl)
+        return S.WhitelistEnabled and WhitelistState[pl.UserId] == true
+    end
 
-		local function removeESP(uid)
-			local obj = espObjects[uid]
+    local function removeESP(uid)
+        local obj = espObjects[uid]
 
-			if not obj then
-				return
-			end
+        if not obj then
+            return
+        end
 
-			pcall(function()
-				if obj.highlight then
-					obj.highlight:Destroy()
-				end
-			end)
+        pcall(function()
+            if obj.highlight then
+                obj.highlight:Destroy()
+            end
+        end)
 
-			pcall(function()
-				if obj.billboard then
-					obj.billboard:Destroy()
-				end
-			end)
+        pcall(function()
+            if obj.billboard then
+                obj.billboard:Destroy()
+            end
+        end)
 
-			-- Clean up tracer if exists
-			if activeTracers and activeTracers[obj.player] then
-				pcall(function()
-					activeTracers[obj.player]:Remove()
-				end)
-				activeTracers[obj.player] = nil
-			end
+        -- Clean up tracer if exists
+        if activeTracers and activeTracers[obj.player] then
+            pcall(function()
+                activeTracers[obj.player]:Remove()
+            end)
+            activeTracers[obj.player] = nil
+        end
 
-			-- Clean up character connections
-			if obj.charConn then
-				pcall(function()
-					obj.charConn:Disconnect()
-				end)
-			end
+        -- Clean up character connections
+        if obj.charConn then
+            pcall(function()
+                obj.charConn:Disconnect()
+            end)
+        end
+        
+        if obj.charAddedConn then
+            pcall(function()
+                obj.charAddedConn:Disconnect()
+            end)
+        end
 
-			espObjects[uid] = nil
-		end
+        espObjects[uid] = nil
+    end
 
-		-- Function to refresh all ESP objects (called when settings change or character resets)
-		local function refreshAllESP()
-			for uid, obj in pairs(espObjects) do
-				local pl = obj.player
-				if pl and pl.Parent then
-					-- Re-setup ESP for this player to apply new settings
-					if pl.Character and pl.Character.Parent then
-						updateESPVisibility(uid, obj, pl)
-					end
-				end
-			end
-		end
+    -- Function to refresh all ESP objects
+    local function refreshAllESP()
+        for uid, obj in pairs(espObjects) do
+            local pl = obj.player
+            if pl and pl.Parent then
+                if pl.Character and pl.Character.Parent then
+                    updateESPVisibility(uid, obj, pl)
+                end
+            end
+        end
+    end
 
-		-- Function to update ESP visibility based on current settings
-		local function updateESPVisibility(uid, obj, pl)
-			if not pl or not pl.Parent then
-				return
-			end
+    -- Function to update ESP visibility based on current settings
+    local function updateESPVisibility(uid, obj, pl)
+        if not pl or not pl.Parent then
+            return
+        end
+        
+        local skip = isTeammate(pl) or isWhitelisted(pl)
+        local espEnabled = S.ESPEnabled
 
-			local skip = isTeammate(pl) or isWhitelisted(pl)
-			local espEnabled = S.ESPEnabled
+        -- Update Highlight (Box) - Always created, visibility toggled
+        if obj.highlight then
+            local boxOn = espEnabled and S.BoxEnabled and not skip
+            obj.highlight.Enabled = boxOn
+            obj.highlight.FillTransparency = boxOn and 0.75 or 1
+            obj.highlight.OutlineTransparency = boxOn and 0 or 1
+        end
 
-			-- Update Highlight (Box)
-			if obj.highlight then
-				local boxOn = espEnabled and S.BoxEnabled and not skip
-				obj.highlight.Enabled = boxOn
-				obj.highlight.FillTransparency = boxOn and 0.75 or 1
-				obj.highlight.OutlineTransparency = boxOn and 0 or 1
-			end
+        -- Update Name Label - Always created, visibility toggled
+        if obj.nameLabel then
+            obj.nameLabel.Visible = espEnabled and S.NameEnabled and not skip
+        end
 
-			-- Update Name Label
-			if obj.nameLabel then
-				obj.nameLabel.Visible = espEnabled and S.NameEnabled and not skip
-			end
+        -- Update Health Bar - Always created, visibility toggled
+        if obj.healthBg and obj.healthFill then
+            obj.healthBg.Visible = espEnabled and S.HealthEnabled and not skip
 
-			-- Update Health Bar
-			if obj.healthBg and obj.healthFill then
-				obj.healthBg.Visible = espEnabled and S.HealthEnabled and not skip
+            if obj.humanoid and obj.humanoid.Parent then
+                local maxHp = obj.humanoid.MaxHealth
+                local currentHp = obj.humanoid.Health
+                local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
 
-				if obj.humanoid and obj.humanoid.Parent then
-					local maxHp = obj.humanoid.MaxHealth
-					local currentHp = obj.humanoid.Health
-					local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
+                obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
 
-					obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                if healthPercent > 0.6 then
+                    obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                elseif healthPercent > 0.3 then
+                    obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+                else
+                    obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                end
+            end
+        end
+    end
 
-					-- Change color based on health percentage
-					if healthPercent > 0.6 then
-						obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-					elseif healthPercent > 0.3 then
-						obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-					else
-						obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-					end
-				end
-			end
-		end
+    local function addESP(pl)
+        if pl == LP then
+            return
+        end
 
-		local function addESP(pl)
-			if pl == LP then
-				return
-			end
+        -- Remove existing ESP for this player first
+        removeESP(pl.UserId)
+        
+        local uid = pl.UserId
 
-			-- Wait a bit for character to load properly
-			task.wait(0.1)
+        -- Store the player object
+        espObjects[uid] = { 
+            player = pl,
+            humanoid = nil,
+            highlight = nil,
+            billboard = nil,
+            nameLabel = nil,
+            healthBg = nil,
+            healthFill = nil,
+            charConn = nil,
+            charAddedConn = nil
+        }
 
-			removeESP(pl.UserId)
-			local uid = pl.UserId
+        -- Function to setup character ESP (creates ALL elements regardless of settings)
+        local function setupChar(char)
+            if not char or not char.Parent then
+                return false
+            end
 
-			-- Store the player object
-			espObjects[uid] = { player = pl }
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then
+                return false
+            end
 
-			-- Function to setup character ESP
-			local function setupChar(char)
-				if not char or not char.Parent then
-					return
-				end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                return false
+            end
 
-				local hum = char:FindFirstChildOfClass("Humanoid")
-				if not hum then
-					return
-				end
+            -- Store humanoid for health updates
+            espObjects[uid].humanoid = hum
 
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				if not hrp then
-					return
-				end
+            -- Setup Highlight (Box ESP) - ALWAYS created
+            local hl = Instance.new("Highlight")
+            hl.Adornee = char
+            hl.FillColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.75
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.OutlineTransparency = 0
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.Enabled = false  -- Start disabled, will be toggled by visibility function
+            hl.Parent = char
+            espObjects[uid].highlight = hl
 
-				-- Store humanoid for health updates
-				espObjects[uid].humanoid = hum
+            -- Setup Billboard for Name and Health - ALWAYS created
+            local bb = Instance.new("BillboardGui")
+            bb.Size = UDim2.fromOffset(140, 50)
+            bb.StudsOffset = Vector3.new(0, 3, 0)
+            bb.AlwaysOnTop = true
+            bb.Adornee = hrp
+            bb.Parent = hrp
 
-				-- Setup Highlight (Box ESP)
-				local hl = Instance.new("Highlight")
-				hl.Adornee = char
-				hl.FillColor = Color3.fromRGB(255, 255, 255)
-				hl.FillTransparency = 0.75
-				hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-				hl.OutlineTransparency = 0
-				hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-				hl.Enabled = false
-				hl.Parent = char
-				espObjects[uid].highlight = hl
+            -- Name Label - ALWAYS created
+            local nameL = Instance.new("TextLabel")
+            nameL.Size = UDim2.new(1, 0, 0, 20)
+            nameL.Position = UDim2.fromOffset(0, 0)
+            nameL.BackgroundTransparency = 1
+            nameL.Text = "[ " .. pl.DisplayName .. " ]"
+            nameL.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameL.TextSize = 12
+            nameL.Font = Enum.Font.GothamBold
+            nameL.TextStrokeTransparency = 0.3
+            nameL.TextXAlignment = Enum.TextXAlignment.Center
+            nameL.Visible = false  -- Start invisible, will be toggled
+            nameL.Parent = bb
+            espObjects[uid].nameLabel = nameL
 
-				-- Setup Billboard for Name and Health
-				local bb = Instance.new("BillboardGui")
-				bb.Size = UDim2.fromOffset(140, 50)
-				bb.StudsOffset = Vector3.new(0, 3, 0)
-				bb.AlwaysOnTop = true
-				bb.Adornee = hrp
-				bb.Parent = hrp
+            -- Health Bar Background - ALWAYS created
+            local hbg = Instance.new("Frame")
+            hbg.Size = UDim2.new(0.8, 0, 0, 6)
+            hbg.Position = UDim2.fromOffset(bb.Size.X.Offset * 0.1, 22)
+            hbg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            hbg.BorderSizePixel = 0
+            hbg.Visible = false  -- Start invisible, will be toggled
+            hbg.Parent = bb
 
-				-- Name Label
-				local nameL = Instance.new("TextLabel", bb)
-				nameL.Size = UDim2.new(1, 0, 0, 20)
-				nameL.Position = UDim2.fromOffset(0, 0)
-				nameL.BackgroundTransparency = 1
-				nameL.Text = "[ " .. pl.DisplayName .. " ]"
-				nameL.TextColor3 = Color3.fromRGB(255, 255, 255)
-				nameL.TextSize = 12
-				nameL.Font = Enum.Font.GothamBold
-				nameL.TextStrokeTransparency = 0.3
-				nameL.TextXAlignment = Enum.TextXAlignment.Center
-				nameL.Visible = false
-				espObjects[uid].nameLabel = nameL
+            -- Health Bar Fill - ALWAYS created
+            local hfill = Instance.new("Frame")
+            hfill.Size = UDim2.new(1, 0, 1, 0)
+            hfill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            hfill.BorderSizePixel = 0
+            hfill.BackgroundTransparency = 0
+            hfill.Parent = hbg
 
-				-- Health Bar Background
-				local hbg = Instance.new("Frame", bb)
-				hbg.Size = UDim2.new(0.8, 0, 0, 6)
-				hbg.Position = UDim2.fromOffset(bb.Size.X.Offset * 0.1, 22)
-				hbg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-				hbg.BorderSizePixel = 0
-				hbg.Visible = false
+            espObjects[uid].billboard = bb
+            espObjects[uid].healthBg = hbg
+            espObjects[uid].healthFill = hfill
+            
+            -- Apply current visibility settings (this will show/hide based on settings)
+            updateESPVisibility(uid, espObjects[uid], pl)
+            
+            return true
+        end
 
-				-- Health Bar Fill
-				local hfill = Instance.new("Frame", hbg)
-				hfill.Size = UDim2.new(1, 0, 1, 0)
-				hfill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-				hfill.BorderSizePixel = 0
-				hfill.BackgroundTransparency = 0
+        -- Function to handle character respawns
+        local function onCharacterAdded(newChar)
+            -- Small delay to ensure character is fully loaded
+            task.wait(0.2)
+            
+            -- Clean up old ESP elements if they exist
+            if espObjects[uid] then
+                pcall(function()
+                    if espObjects[uid].highlight then
+                        espObjects[uid].highlight:Destroy()
+                    end
+                    if espObjects[uid].billboard then
+                        espObjects[uid].billboard:Destroy()
+                    end
+                end)
+                
+                -- Reset the stored references
+                espObjects[uid].highlight = nil
+                espObjects[uid].billboard = nil
+                espObjects[uid].nameLabel = nil
+                espObjects[uid].healthBg = nil
+                espObjects[uid].healthFill = nil
+                espObjects[uid].humanoid = nil
+                
+                -- Setup ESP on the new character
+                setupChar(newChar)
+            end
+        end
+        
+        -- Listen for character respawns
+        if not espObjects[uid].charAddedConn then
+            espObjects[uid].charAddedConn = pl.CharacterAdded:Connect(onCharacterAdded)
+        end
 
-				espObjects[uid].billboard = bb
-				espObjects[uid].healthBg = hbg
-				espObjects[uid].healthFill = hfill
+        -- Check if character exists and setup ESP
+        if pl.Character and pl.Character.Parent and pl.Character:FindFirstChildOfClass("Humanoid") then
+            setupChar(pl.Character)
+        else
+            -- Wait for character to load
+            local charConn
+            charConn = pl.CharacterAdded:Connect(function(char)
+                task.wait(0.2)
+                setupChar(char)
+                if charConn then
+                    charConn:Disconnect()
+                end
+            end)
+            espObjects[uid].charConn = charConn
+        end
+    end
 
-				-- Apply current visibility settings
-				updateESPVisibility(uid, espObjects[uid], pl)
+    -- Heartbeat loop for updating ESP visibility and health for ALL players
+    trackConn(RS.Heartbeat:Connect(function()
+        -- Update ESP for all players
+        for uid, obj in pairs(espObjects) do
+            local pl = obj.player
 
-				-- Listen for character reset (when humanoid dies and respawns)
-				local function onCharacterAdded(newChar)
-					task.wait(0.1)
-					-- Clean up old ESP elements
-					pcall(function()
-						if espObjects[uid].highlight then
-							espObjects[uid].highlight:Destroy()
-						end
-						if espObjects[uid].billboard then
-							espObjects[uid].billboard:Destroy()
-						end
-					end)
-					-- Setup new character with ESP
-					setupChar(newChar)
-				end
+            -- Check if player still exists
+            if not pl or not pl.Parent then
+                removeESP(uid)
+            elseif pl.Character and pl.Character.Parent then
+                -- Update visibility (this handles ALL players regardless of render distance)
+                updateESPVisibility(uid, obj, pl)
+                
+                -- Update health bar values if health is enabled
+                if S.ESPEnabled and S.HealthEnabled and obj.healthFill and obj.humanoid and obj.humanoid.Parent then
+                    local maxHp = obj.humanoid.MaxHealth
+                    local currentHp = obj.humanoid.Health
+                    local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
+                    obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                    
+                    if healthPercent > 0.6 then
+                        obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                    elseif healthPercent > 0.3 then
+                        obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+                    else
+                        obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                    end
+                end
+            end
+        end
 
-				-- Store the connection for character respawns
-				if not espObjects[uid].charAddedConn then
-					espObjects[uid].charAddedConn = pl.CharacterAdded:Connect(onCharacterAdded)
-				end
-			end
+        -- Handle Tracers (only for players that are visible on screen)
+        if tracerEnabled and Drawing then
+            local center = Vector2.new(CAM.ViewportSize.X / 2, CAM.ViewportSize.Y)
+            local wallCheck = S.WallCheck
 
-			-- Check if character exists
-			if pl.Character and pl.Character:FindFirstChildOfClass("Humanoid") then
-				setupChar(pl.Character)
-			else
-				-- Wait for character to load
-				local charConn
-				charConn = pl.CharacterAdded:Connect(function(char)
-					task.wait(0.1)
-					setupChar(char)
-					if charConn then
-						charConn:Disconnect()
-					end
-				end)
+            for _, pl in ipairs(Players:GetPlayers()) do
+                if pl ~= LP and pl.Character then
+                    local head = pl.Character:FindFirstChild("Head")
+                    if head then
+                        local sp, onScreen = CAM:WorldToViewportPoint(head.Position)
+                        
+                        -- Check visibility if wall check is enabled
+                        local isVisible = true
+                        if wallCheck and onScreen then
+                            local ray = Ray.new(CAM.CFrame.Position, (head.Position - CAM.CFrame.Position).unit * 500)
+                            local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LP.Character})
+                            if hit and hit:IsDescendantOf(pl.Character) then
+                                isVisible = true
+                            elseif hit then
+                                isVisible = false
+                            end
+                        end
 
-				-- Store connection for cleanup
-				espObjects[uid].charConn = charConn
-			end
-		end
+                        if onScreen and (not wallCheck or isVisible) then
+                            if not activeTracers[pl] then
+                                local line = Drawing.new("Line")
+                                line.Thickness = 1.5
+                                line.Color = Color3.fromRGB(255, 0, 0)
+                                line.Transparency = 0.4
+                                activeTracers[pl] = line
+                            end
 
-		-- Heartbeat loop for updating ESP visibility and health
-		trackConn(RS.Heartbeat:Connect(function()
-			for uid, obj in pairs(espObjects) do
-				local pl = obj.player
+                            activeTracers[pl].From = center
+                            activeTracers[pl].To = Vector2.new(sp.X, sp.Y)
+                            activeTracers[pl].Visible = true
+                        else
+                            if activeTracers[pl] then
+                                activeTracers[pl].Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        elseif not tracerEnabled then
+            -- Clean up tracers if disabled
+            for _, line in pairs(activeTracers) do
+                pcall(function()
+                    line:Remove()
+                end)
+            end
+            activeTracers = {}
+        end
+    end))
 
-				if not pl or not pl.Parent then
-					removeESP(uid)
-				elseif pl.Character and pl.Character.Parent then
-					-- Update visibility and health
-					updateESPVisibility(uid, obj, pl)
+    -- Initial population - Add ESP for ALL existing players
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl ~= LP then
+            task.spawn(addESP, pl)
+        end
+    end
 
-					-- Update health bar values if health is enabled
-					if S.ESPEnabled and S.HealthEnabled and obj.healthFill and obj.humanoid and obj.humanoid.Parent then
-						local maxHp = obj.humanoid.MaxHealth
-						local currentHp = obj.humanoid.Health
-						local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
-						obj.healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+    -- Handle new players joining
+    trackConn(Players.PlayerAdded:Connect(function(pl)
+        if pl ~= LP then
+            task.spawn(addESP, pl)
+        end
+    end))
 
-						if healthPercent > 0.6 then
-							obj.healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-						elseif healthPercent > 0.3 then
-							obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-						else
-							obj.healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-						end
-					end
-				end
-			end
-
-			-- Handle Tracers
-			if tracerEnabled and Drawing then
-				local center = Vector2.new(CAM.ViewportSize.X / 2, CAM.ViewportSize.Y)
-				local wallCheck = S.WallCheck
-
-				for _, pl in ipairs(Players:GetPlayers()) do
-					if pl ~= LP and pl.Character then
-						local head = pl.Character:FindFirstChild("Head")
-						if head then
-							local sp, onScreen = CAM:WorldToViewportPoint(head.Position)
-
-							-- Check visibility if wall check is enabled
-							local isVisible = true
-							if wallCheck and onScreen then
-								local ray = Ray.new(CAM.CFrame.Position, (head.Position - CAM.CFrame.Position).unit * 500)
-								local hit, pos = workspace:FindPartOnRay(ray, LP.Character)
-								if hit and hit:IsDescendantOf(pl.Character) then
-									isVisible = true
-								elseif hit then
-									isVisible = false
-								end
-							end
-
-							if onScreen and (not wallCheck or isVisible) then
-								if not activeTracers[pl] then
-									local line = Drawing.new("Line")
-									line.Thickness = 1.5
-									line.Color = Color3.fromRGB(255, 0, 0)
-									line.Transparency = 0.4
-									activeTracers[pl] = line
-								end
-
-								activeTracers[pl].From = center
-								activeTracers[pl].To = Vector2.new(sp.X, sp.Y)
-								activeTracers[pl].Visible = true
-							else
-								if activeTracers[pl] then
-									activeTracers[pl].Visible = false
-								end
-							end
-						end
-					end
-				end
-			end
-		end))
-
-		-- Initial population
-		for _, pl in pairs(Players:GetPlayers()) do
-			if pl ~= LP then
-				task.spawn(addESP, pl)
-			end
-		end
-
-		-- Handle new players joining
-		trackConn(Players.PlayerAdded:Connect(function(pl)
-			if pl ~= LP then
-				task.spawn(addESP, pl)
-			end
-		end))
-
-		-- Handle players leaving
-		trackConn(Players.PlayerRemoving:Connect(function(pl)
-			removeESP(pl.UserId)
-		end))
-	end
-
+    -- Handle players leaving
+    trackConn(Players.PlayerRemoving:Connect(function(pl)
+        removeESP(pl.UserId)
+    end))
+end
     do
         local PLTab = mkSubFrame("PlayerList")
         local PL_W = CON_W - PAD * 2
